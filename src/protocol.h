@@ -44,6 +44,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MVD_PEXT1_FLOATCOORDS       0x00000001 // FTE_PEXT_FLOATCOORDS but for entity/player coords only
 #define MVD_PEXT1_HIGHLAGTELEPORT   0x00000002 // Adjust movement direction for frames following teleport
 #define MVD_PEXT1_SERVERSIDEWEAPON  0x00000004 // Server-side weapon selection
+#define	MVD_PEXT1_WEAPONPREDICTION	0x00000080 // Reki weapon prediction
 
 //===============================================
 
@@ -91,6 +92,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MVD_PEXT1_FLOATCOORDS       0x00000001 // FTE_PEXT_FLOATCOORDS but for entity/player coords only
 #define MVD_PEXT1_HIGHLAGTELEPORT   0x00000002 // Adjust movement direction for frames following teleport
 #define MVD_PEXT1_SERVERSIDEWEAPON  0x00000004 // Server-side weapon selection
+#define	MVD_PEXT1_WEAPONPREDICTION	0x00000080 // Reki weapon prediction
 
 #define MVD_PEXT1_INCLUDEINMVD      (0x0)
 

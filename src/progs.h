@@ -189,6 +189,9 @@ extern int fofs_hide_players;
 extern int fofs_teleported;
 extern int fofs_client_time;
 extern int fofs_attack_finished;
+extern int fofs_client_nextthink;
+extern int fofs_client_thinkindex;
+extern int fofs_client_ping;
 
 #define EdictFieldFloat(ed, fieldoffset) ((eval_t *)((byte *)&(ed)->v + (fieldoffset)))->_float
 #define EdictFieldVector(ed, fieldoffset) ((eval_t *)((byte *)&(ed)->v + (fieldoffset)))->vector

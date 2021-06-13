@@ -44,6 +44,7 @@ int fofs_attack_finished;
 int	fofs_client_nextthink;
 int	fofs_client_thinkindex;
 int	fofs_client_ping;
+int	fofs_client_predflags;
 
 /*
 ================
@@ -369,11 +370,13 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 	fofs_visibility = ED_FindFieldOffset ("visclients");
 	fofs_hide_players = ED_FindFieldOffset ("hideplayers");
 	fofs_teleported = ED_FindFieldOffset ("teleported");
+
 	fofs_client_time = ED_FindFieldOffset("client_time");
 	fofs_attack_finished = ED_FindFieldOffset("attack_finished");
 	fofs_client_nextthink = ED_FindFieldOffset("client_nextthink");
 	fofs_client_thinkindex = ED_FindFieldOffset("client_thinkindex");
 	fofs_client_ping = ED_FindFieldOffset("client_ping");
+	fofs_client_predflags = ED_FindFieldOffset("client_predflags");
 
 #ifdef MVD_PEXT1_HIGHLAGTELEPORT
 	if (fofs_teleported) {
@@ -393,7 +396,7 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 	}
 #endif
 #ifdef MVD_PEXT1_WEAPONPREDICTION
-	if (fofs_client_time && fofs_attack_finished && fofs_client_nextthink && fofs_client_thinkindex) {
+	if (fofs_client_time && fofs_attack_finished && fofs_client_ping) {
 		svs.mvdprotocolextension1 |= MVD_PEXT1_WEAPONPREDICTION;
 	}
 	else {

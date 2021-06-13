@@ -192,6 +192,7 @@ extern int fofs_attack_finished;
 extern int fofs_client_nextthink;
 extern int fofs_client_thinkindex;
 extern int fofs_client_ping;
+extern int fofs_client_predflags;
 
 #define EdictFieldFloat(ed, fieldoffset) ((eval_t *)((byte *)&(ed)->v + (fieldoffset)))->_float
 #define EdictFieldVector(ed, fieldoffset) ((eval_t *)((byte *)&(ed)->v + (fieldoffset)))->vector

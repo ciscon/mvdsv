@@ -62,7 +62,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 #define QW_VERSION          "2.40"
-#define SERVER_VERSION      "0.34-beta"
+#define SERVER_VERSION      "0.34-beta-RekiFork"
 #define VERSION_NUM         0.33
 #define SERVER_NAME         "MVDSV"
 #define SERVER_FULLNAME     "MVDSV: MultiView Demo SerVer"

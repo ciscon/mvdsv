@@ -90,14 +90,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifdef PROTOCOL_VERSION_MVD1
 
 
-#define MVD_PEXT1_FLOATCOORDS       (1 <<  0) // FTE_PEXT_FLOATCOORDS but for entity/player coords only
-#define MVD_PEXT1_HIGHLAGTELEPORT   (1 <<  1) // Adjust movement direction for frames following teleport
-#define MVD_PEXT1_SERVERSIDEWEAPON  (1 <<  2) // Server-side weapon selection
-#define MVD_PEXT1_DEBUG_WEAPON      (1 <<  3) // Send weapon-choice explanation to server for logging
-#define MVD_PEXT1_DEBUG_ANTILAG     (1 <<  4) // Send predicted positions to server (compare to antilagged positions)
-#define MVD_PEXT1_HIDDEN_MESSAGES   (1 <<  5) // dem_multiple(0) packets are in format (<length> <type-id>+ <packet-data>)*
-#define MVD_PEXT1_SERVERSIDEWEAPON2 (1 <<  6) // Server-side weapon selection supports clc_mvd_weapon_full_impulse
-#define	MVD_PEXT1_WEAPONPREDICTION	(1 <<  7) // Reki weapon prediction
+#define MVD_PEXT1_FLOATCOORDS       (1 << 0) // FTE_PEXT_FLOATCOORDS but for entity/player coords only
+#define MVD_PEXT1_HIGHLAGTELEPORT   (1 << 1) // Adjust movement direction for frames following teleport
+#define MVD_PEXT1_SERVERSIDEWEAPON  (1 << 2) // Server-side weapon selection
+#define MVD_PEXT1_DEBUG_WEAPON      (1 << 3) // Send weapon-choice explanation to server for logging
+#define MVD_PEXT1_DEBUG_ANTILAG     (1 << 4) // Send predicted positions to server (compare to antilagged positions)
+#define MVD_PEXT1_HIDDEN_MESSAGES   (1 << 5) // dem_multiple(0) packets are in format (<length> <type-id>+ <packet-data>)*
+#define MVD_PEXT1_SERVERSIDEWEAPON2 (1 << 6) // Server-side weapon selection supports clc_mvd_weapon_full_impulse
+#define	MVD_PEXT1_WEAPONPREDICTION	(1 << 7) // Reki weapon prediction
 
 #if defined(MVD_PEXT1_DEBUG_ANTILAG) || defined(MVD_PEXT1_DEBUG_WEAPON)
 #define MVD_PEXT1_DEBUG

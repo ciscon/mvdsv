@@ -738,7 +738,7 @@ static void SV_WritePlayersToClient (client_t *client, client_frame_t *frame, by
 
 		if (pflags & PF_WEAPONFRAME)
 		{
-			MSG_WriteByte(msg, ent->v.weaponframe);
+			MSG_WriteByte(msg, ent->v->weaponframe);
 			
 			#ifdef MVD_PEXT1_WEAPONPREDICTION
 			if (client->mvdprotocolextensions1 & MVD_PEXT1_WEAPONPREDICTION)
@@ -747,10 +747,10 @@ static void SV_WritePlayersToClient (client_t *client, client_frame_t *frame, by
 
 				if (send_wepprediction)
 				{
-					MSG_WriteByte(msg, (byte)ent->v.impulse);
+					MSG_WriteByte(msg, (byte)ent->v->impulse);
 
-					short wep_data = (short)ent->v.weapon;
-					if (wep_data < ent->v.weapon)
+					short wep_data = (short)ent->v->weapon;
+					if (wep_data < ent->v->weapon)
 						wep_data = 32768;
 					MSG_WriteShort(msg, wep_data);
 
@@ -761,10 +761,10 @@ static void SV_WritePlayersToClient (client_t *client, client_frame_t *frame, by
 					MSG_WriteByte(msg, EdictFieldFloat(ent, fofs_client_ping));
 					MSG_WriteByte(msg, EdictFieldFloat(ent, fofs_client_predflags));
 
-					MSG_WriteByte(msg, (byte)ent->v.ammo_shells);
-					MSG_WriteByte(msg, (byte)ent->v.ammo_nails);
-					MSG_WriteByte(msg, (byte)ent->v.ammo_rockets);
-					MSG_WriteByte(msg, (byte)ent->v.ammo_cells);
+					MSG_WriteByte(msg, (byte)ent->v->ammo_shells);
+					MSG_WriteByte(msg, (byte)ent->v->ammo_nails);
+					MSG_WriteByte(msg, (byte)ent->v->ammo_rockets);
+					MSG_WriteByte(msg, (byte)ent->v->ammo_cells);
 				}
 			}
 			#endif
@@ -879,7 +879,7 @@ int SV_SimpleProjectileWriteFrame_Sproj(client_t *client, struct sizebuf_s *msg,
 
 		ed = EDICT_NUM(number);//sv.edicts + number;
 		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
-		if (ed->v.movetype == MOVETYPE_FLYMISSILE)
+		if (ed->v->movetype == MOVETYPE_FLYMISSILE)
 		{
 			client->csqcentityscope[number] |= SCOPE_WANTUPDATE;
 		}
@@ -969,26 +969,26 @@ int SV_SimpleProjectileWriteFrame_Sproj(client_t *client, struct sizebuf_s *msg,
 			///*
 			if (sendflags & U_ORIGIN1)
 			{
-				MSG_WriteFloat(msg, ed->v.origin[0]);
-				MSG_WriteFloat(msg, ed->v.origin[1]);
-				MSG_WriteFloat(msg, ed->v.origin[2]);
+				MSG_WriteFloat(msg, ed->v->origin[0]);
+				MSG_WriteFloat(msg, ed->v->origin[1]);
+				MSG_WriteFloat(msg, ed->v->origin[2]);
 
-				MSG_WriteFloat(msg, ed->v.velocity[0]);
-				MSG_WriteFloat(msg, ed->v.velocity[1]);
-				MSG_WriteFloat(msg, ed->v.velocity[2]);
+				MSG_WriteFloat(msg, ed->v->velocity[0]);
+				MSG_WriteFloat(msg, ed->v->velocity[1]);
+				MSG_WriteFloat(msg, ed->v->velocity[2]);
 			}
 
 			if (sendflags & U_ANGLE1)
 			{
-				MSG_WriteAngle(msg, ed->v.angles[0]);
-				MSG_WriteAngle(msg, ed->v.angles[1]);
-				MSG_WriteAngle(msg, ed->v.angles[2]);
+				MSG_WriteAngle(msg, ed->v->angles[0]);
+				MSG_WriteAngle(msg, ed->v->angles[1]);
+				MSG_WriteAngle(msg, ed->v->angles[2]);
 			}
 
 			if (sendflags & U_MODEL)
 			{
-				MSG_WriteShort(msg, ed->v.modelindex);
-				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v.owner)));
+				MSG_WriteShort(msg, ed->v->modelindex);
+				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v->owner)));
 			}
 
 			if (sendflags & U_ORIGIN3)
@@ -1054,25 +1054,25 @@ int SV_PrepareEntity_Sproj(edict_t *ent, entity_state_t *cs, int enumber)
 	unsigned int sendflags;
 	int i;
 
-	if (ent->v.movetype != MOVETYPE_FLYMISSILE)
+	if (ent->v->movetype != MOVETYPE_FLYMISSILE)
 		return false;
 
-	if (ent->v.angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v.angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v.angles[2] != sv.simple_projectiles[enumber].angles[2])
+	if (ent->v->angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v->angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v->angles[2] != sv.simple_projectiles[enumber].angles[2])
 	{
-		VectorCopy(ent->v.angles, sv.simple_projectiles[enumber].angles);
+		VectorCopy(ent->v->angles, sv.simple_projectiles[enumber].angles);
 		sendflags |= U_ANGLE1;
 	}
 
-	if (ent->v.velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v.velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v.velocity[2] != sv.simple_projectiles[enumber].velocity[2])
+	if (ent->v->velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v->velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v->velocity[2] != sv.simple_projectiles[enumber].velocity[2])
 	{
-		VectorCopy(ent->v.velocity, sv.simple_projectiles[enumber].velocity);
-		VectorCopy(ent->v.origin, sv.simple_projectiles[enumber].origin);
+		VectorCopy(ent->v->velocity, sv.simple_projectiles[enumber].velocity);
+		VectorCopy(ent->v->origin, sv.simple_projectiles[enumber].origin);
 		sendflags |= (U_ORIGIN1 | U_ORIGIN2);
 	}
 
-	if (ent->v.modelindex != sv.simple_projectiles[enumber].modelindex)
+	if (ent->v->modelindex != sv.simple_projectiles[enumber].modelindex)
 	{
-		sv.simple_projectiles[enumber].modelindex = ent->v.modelindex;
+		sv.simple_projectiles[enumber].modelindex = ent->v->modelindex;
 		sendflags |= U_MODEL;
 
 
@@ -1147,7 +1147,7 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 
 		ed = EDICT_NUM(number);//sv.edicts + number;
 		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
-		if (ed->v.movetype == MOVETYPE_FLYMISSILE)
+		if (ed->v->movetype == MOVETYPE_FLYMISSILE)
 		{
 			client->csqcentityscope[number] |= SCOPE_WANTUPDATE;
 		}
@@ -1237,26 +1237,26 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 			///*
 			if (sendflags & U_ORIGIN1)
 			{
-				MSG_WriteFloat(msg, ed->v.origin[0]);
-				MSG_WriteFloat(msg, ed->v.origin[1]);
-				MSG_WriteFloat(msg, ed->v.origin[2]);
+				MSG_WriteFloat(msg, ed->v->origin[0]);
+				MSG_WriteFloat(msg, ed->v->origin[1]);
+				MSG_WriteFloat(msg, ed->v->origin[2]);
 
-				MSG_WriteFloat(msg, ed->v.velocity[0]);
-				MSG_WriteFloat(msg, ed->v.velocity[1]);
-				MSG_WriteFloat(msg, ed->v.velocity[2]);
+				MSG_WriteFloat(msg, ed->v->velocity[0]);
+				MSG_WriteFloat(msg, ed->v->velocity[1]);
+				MSG_WriteFloat(msg, ed->v->velocity[2]);
 			}
 
 			if (sendflags & U_ANGLE1)
 			{
-				MSG_WriteAngle(msg, ed->v.angles[0]);
-				MSG_WriteAngle(msg, ed->v.angles[1]);
-				MSG_WriteAngle(msg, ed->v.angles[2]);
+				MSG_WriteAngle(msg, ed->v->angles[0]);
+				MSG_WriteAngle(msg, ed->v->angles[1]);
+				MSG_WriteAngle(msg, ed->v->angles[2]);
 			}
 
 			if (sendflags & U_MODEL)
 			{
-				MSG_WriteShort(msg, ed->v.modelindex);
-				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v.owner)));
+				MSG_WriteShort(msg, ed->v->modelindex);
+				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v->owner)));
 			}
 
 			if (sendflags & U_ORIGIN3)
@@ -1322,25 +1322,25 @@ int SV_PrepareEntity_CSQC(edict_t *ent, entity_state_t *cs, int enumber)
 	unsigned int sendflags;
 	int i;
 
-	if (ent->v.movetype != MOVETYPE_FLYMISSILE)
+	if (ent->v->movetype != MOVETYPE_FLYMISSILE)
 		return false;
 
-	if (ent->v.angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v.angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v.angles[2] != sv.simple_projectiles[enumber].angles[2])
+	if (ent->v->angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v->angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v->angles[2] != sv.simple_projectiles[enumber].angles[2])
 	{
-		VectorCopy(ent->v.angles, sv.simple_projectiles[enumber].angles);
+		VectorCopy(ent->v->angles, sv.simple_projectiles[enumber].angles);
 		sendflags |= U_ANGLE1;
 	}
 
-	if (ent->v.velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v.velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v.velocity[2] != sv.simple_projectiles[enumber].velocity[2])
+	if (ent->v->velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v->velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v->velocity[2] != sv.simple_projectiles[enumber].velocity[2])
 	{
-		VectorCopy(ent->v.velocity, sv.simple_projectiles[enumber].velocity);
-		VectorCopy(ent->v.origin, sv.simple_projectiles[enumber].origin);
+		VectorCopy(ent->v->velocity, sv.simple_projectiles[enumber].velocity);
+		VectorCopy(ent->v->origin, sv.simple_projectiles[enumber].origin);
 		sendflags |= (U_ORIGIN1 | U_ORIGIN2);
 	}
 
-	if (ent->v.modelindex != sv.simple_projectiles[enumber].modelindex)
+	if (ent->v->modelindex != sv.simple_projectiles[enumber].modelindex)
 	{
-		sv.simple_projectiles[enumber].modelindex = ent->v.modelindex;
+		sv.simple_projectiles[enumber].modelindex = ent->v->modelindex;
 		sendflags |= U_MODEL;
 
 

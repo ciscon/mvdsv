@@ -1951,42 +1951,6 @@ intptr_t PF2_FS_GetFileList(char *path, char *ext,
 	return numfiles;
 }
 
-
-
-
-
-
-/*
-  qvmextensions
-*/
-void PF2_SetExtField(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{
-
-
-
-}
-
-
-void PF2_GetExtField(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{
-
-
-
-}
-
-
-struct
-{
-	char			*extname;
-	pr2_trapcall_t	trap;
-} qvmextensions[] =
-{
-	{"SetExtField",			PF2_SetExtField},
-	{"GetExtField",			PF2_GetExtField},
-	{NULL, NULL}
-};
-
-
 /*
   int trap_Map_Extension( const char* ext_name, int mapto)
   return:
@@ -1994,31 +1958,23 @@ struct
    -1	not found
    -2	cannot map
 */
-extern int pr2_numAPI;
-extern pr2_trapcall_t pr2_API[];
-void PF2_Map_Extension(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
+intptr_t PF2_Map_Extension(char *name, int mapto)
 {
-	char *extname = VM_POINTER(base, mask, stack[0].string);
-	int mapto = stack[1]._int;
+	if (mapto > 512)
+	{
+		return -2;
+	}
+
+
+	if (!name)
+	{
+		if (mapto < _G__LASTAPI)
+			return -2;
+		return -1;
+	}
+
+
 	int i;
-
-
-	if(mapto < pr2_numAPI)
-	{
-		retval->_int = -2;
-		return;
-	}
-
-
-	if (!extname)
-	{
-		retval->_int = -1;
-		if (mapto < G_MAX)
-			retval->_int = -2;
-		return;
-	}
-
-
 	for (i = 0; qvmextensions[i].extname; i++)
 	{
 		if (!strcasecmp(extname, qvmextensions[i].extname))
@@ -2029,41 +1985,7 @@ void PF2_Map_Extension(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*ret
 		}
 	}
 
-
-	retval->_int = -1;
-}
-////////////////////
-//
-// timewaster functions
-//
-////////////////////
-void PF2_strcmp(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{
-	retval->_int=  strcmp( (char *) VM_POINTER(base,mask,stack[0].string),
-	                       (char *) VM_POINTER(base,mask,stack[1].string));
-}
-
-void PF2_strncmp(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{
-	retval->_int=  strncmp( (char *) VM_POINTER(base,mask,stack[0].string),
-	                        (char *) VM_POINTER(base,mask,stack[1].string),stack[2]._int);
-}
-
-void PF2_stricmp(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{
-	retval->_int=  strcasecmp( (char *) VM_POINTER(base,mask,stack[0].string),
-	                           (char *) VM_POINTER(base,mask,stack[1].string));
-}
-
-void PF2_strnicmp(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{
-	retval->_int=  strncasecmp( (char *) VM_POINTER(base,mask,stack[0].string),
-	                            (char *) VM_POINTER(base,mask,stack[1].string),stack[2]._int);
-}
-
-void PF2_strlcpy(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
-{ // (char *dst, char *src, size_t siz)
-	retval->_int = strlcpy( (char *) VM_POINTER(base,mask,stack[0].string), (char *) VM_POINTER(base,mask,stack[1].string), stack[2]._int );
+	return -1;
 }
 /////////Bot Functions
 extern cvar_t maxclients, maxspectators;
@@ -2446,7 +2368,6 @@ void PF2_SetUserInfo(int entnum, char *k, char *v, int flags)
 		}
 	}
 }
-
 
 void PF2_VisibleTo(int viewer, int first, int len, byte *visible)
 {

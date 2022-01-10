@@ -439,6 +439,14 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 		svs.mvdprotocolextension1 &= ~MVD_PEXT1_WEAPONPREDICTION;
 	}
 #endif
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+	if (TRUE) {
+		svs.mvdprotocolextension1 |= MVD_PEXT1_SIMPLEPROJECTILE;
+	}
+	else {
+		svs.mvdprotocolextension1 &= ~MVD_PEXT1_SIMPLEPROJECTILE;
+	}
+#endif
 
 	// find optional QC-exported functions.
 	// we have it here, so we set it to NULL in case of PR2 progs.

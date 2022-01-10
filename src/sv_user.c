@@ -3472,6 +3472,42 @@ void SV_PreRunCmd(void)
 	memset(playertouch, 0, sizeof(playertouch));
 }
 
+
+
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+/*
+===========
+CSQC Stuff, for now just SimpleProjectiles
+===========
+*/
+qbool SV_FrameLost(int framenum)
+{
+	if (framenum <= sv_client->csqc_framenum)
+	{
+		EntityFrameCSQC_LostFrame(sv_client, framenum);
+		return true;
+	}
+
+	return false;
+}
+
+
+static void SV_FrameAck(int framenum)
+{
+	/*
+	int i;
+	// scan for packets made obsolete by this ack and delete them
+	for (i = 0; i < ENTITYFRAME5_MAXPACKETLOGS; i++)
+		if (d->packetlog[i].packetnumber <= framenum)
+			d->packetlog[i].packetnumber = 0;
+	*/
+}
+
+
+
+#endif
+
+
 /*
 ===========
 SV_RunCmd
@@ -4325,6 +4361,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 	int             checksumIndex;
 	byte            checksum, calculatedChecksum;
 	int             seq_hash;
+	int				num;
 
 #ifdef MVD_PEXT1_DEBUG
 	int             antilag_players_present = 0;
@@ -4465,15 +4502,15 @@ void SV_ExecuteClientMessage (client_t *cl)
 		switch (c)
 		{
 		default:
-			Con_Printf ("SV_ReadClientMessage: unknown command char\n");
-			SV_DropClient (cl);
+			Con_Printf("SV_ReadClientMessage: unknown command char\n");
+			SV_DropClient(cl);
 			return;
 
 		case clc_nop:
 			break;
 
 		case clc_delta:
-			cl->delta_sequence = MSG_ReadByte ();
+			cl->delta_sequence = MSG_ReadByte();
 			break;
 
 #ifdef MVD_PEXT1_DEBUG
@@ -4529,7 +4566,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			move_issued = true;
 
 			checksumIndex = MSG_GetReadCount();
-			checksum = (byte)MSG_ReadByte ();
+			checksum = (byte)MSG_ReadByte();
 
 			// read loss percentage
 			//bliP: file percent ->
@@ -4546,23 +4583,23 @@ void SV_ExecuteClientMessage (client_t *cl)
 			//<-
 
 #ifndef SERVERONLY
-			MSG_ReadDeltaUsercmd (&nullcmd, &oldest, PROTOCOL_VERSION);
-			MSG_ReadDeltaUsercmd (&oldest, &oldcmd, PROTOCOL_VERSION);
-			MSG_ReadDeltaUsercmd (&oldcmd, &newcmd, PROTOCOL_VERSION);
+			MSG_ReadDeltaUsercmd(&nullcmd, &oldest, PROTOCOL_VERSION);
+			MSG_ReadDeltaUsercmd(&oldest, &oldcmd, PROTOCOL_VERSION);
+			MSG_ReadDeltaUsercmd(&oldcmd, &newcmd, PROTOCOL_VERSION);
 #else
-			MSG_ReadDeltaUsercmd (&nullcmd, &oldest);
-			MSG_ReadDeltaUsercmd (&oldest, &oldcmd);
-			MSG_ReadDeltaUsercmd (&oldcmd, &newcmd);
+			MSG_ReadDeltaUsercmd(&nullcmd, &oldest);
+			MSG_ReadDeltaUsercmd(&oldest, &oldcmd);
+			MSG_ReadDeltaUsercmd(&oldcmd, &newcmd);
 #endif
 
-			if ( cl->state != cs_spawned )
+			if (cl->state != cs_spawned)
 				break;
 
 #ifdef CHAT_ICON_EXPERIMENTAL
 			s = Info_Get(&cl->_userinfoshort_ctx_, "chat");
-			if ( s[0] ) {
-// allow movement while in console
-//				newcmd.forwardmove = newcmd.sidemove = newcmd.upmove = 0;
+			if (s[0]) {
+				// allow movement while in console
+				//				newcmd.forwardmove = newcmd.sidemove = newcmd.upmove = 0;
 				newcmd.buttons &= BUTTON_JUMP; // only jump button allowed while in console
 
 // somemods uses impulses for commands, so let them use
@@ -4579,7 +4616,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 			if (calculatedChecksum != checksum)
 			{
-				Con_DPrintf ("Failed command checksum for %s(%d) (%d != %d)\n", cl->name, cl->netchan.incoming_sequence, checksum, calculatedChecksum);
+				Con_DPrintf("Failed command checksum for %s(%d) (%d != %d)\n", cl->name, cl->netchan.incoming_sequence, checksum, calculatedChecksum);
 				return;
 			}
 
@@ -4611,16 +4648,17 @@ void SV_ExecuteClientMessage (client_t *cl)
 					VectorCopy(cl->edict->v.origin, cl->antilag_positions[cl->antilag_position_next % MAX_ANTILAG_POSITIONS].origin);
 					cl->antilag_position_next++;
 				}
-			} else {
+			}
+			else {
 				cl->antilag_position_next = 0;
 			}
 			break;
 
 
 		case clc_stringcmd:
-			s = MSG_ReadString ();
+			s = MSG_ReadString();
 			s[1023] = 0;
-			SV_ExecuteUserCommand (s);
+			SV_ExecuteUserCommand(s);
 			break;
 
 		case clc_tmove:
@@ -4642,6 +4680,26 @@ void SV_ExecuteClientMessage (client_t *cl)
 #ifdef FTE_PEXT2_VOICECHAT
 		case clc_voicechat:
 			SV_VoiceReadPacket();
+			break;
+#endif
+
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+		case clc_ackframe:
+			num = MSG_ReadLong();
+
+
+			///*
+			for (i = sv_client->csqc_latestverified + 1; i < num; i++)
+			{
+				if (!SV_FrameLost(i))
+					break;
+			}
+			SV_FrameAck(num);
+			sv_client->csqc_latestverified = num;
+			//*/
+
+			
+
 			break;
 #endif
 		}

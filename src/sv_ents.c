@@ -39,7 +39,7 @@ cvar_t	sv_nailhack	= {"sv_nailhack", "1"};
 // Maximum packet we will send - currently 256 if extension supported
 #define MAX_PACKETENTITIES_POSSIBLE 256
 
-static qbool SV_AddNailUpdate (edict_t *ent)
+static qbool SV_AddNailUpdate(edict_t *ent)
 {
 	if ((int)sv_nailhack.value)
 		return false;
@@ -58,7 +58,7 @@ static qbool SV_AddNailUpdate (edict_t *ent)
 	return true;
 }
 
-static void SV_EmitNailUpdate (sizebuf_t *msg, qbool recorder)
+static void SV_EmitNailUpdate(sizebuf_t *msg, qbool recorder)
 {
 	int x, y, z, p, yaw, n, i;
 	byte bits[6]; // [48 bits] xyzpy 12 12 12 4 8
@@ -106,6 +106,7 @@ static void SV_EmitNailUpdate (sizebuf_t *msg, qbool recorder)
 			MSG_WriteByte (msg, bits[i]);
 	}
 }
+
 
 //=============================================================================
 
@@ -739,6 +740,7 @@ static void SV_WritePlayersToClient (client_t *client, client_frame_t *frame, by
 		{
 			MSG_WriteByte(msg, ent->v.weaponframe);
 			
+			#ifdef MVD_PEXT1_WEAPONPREDICTION
 			if (client->mvdprotocolextensions1 & MVD_PEXT1_WEAPONPREDICTION)
 			{
 				MSG_WriteByte(msg, send_wepprediction);
@@ -765,6 +767,7 @@ static void SV_WritePlayersToClient (client_t *client, client_frame_t *frame, by
 					MSG_WriteByte(msg, (byte)ent->v.ammo_cells);
 				}
 			}
+			#endif
 		}
 	}
 }
@@ -805,6 +808,671 @@ qbool SV_EntityVisibleToClient (client_t* client, int e, byte* pvs)
 	return true;
 }
 
+
+
+
+#if defined(MVD_PEXT1_SIMPLEPROJECTILE) || defined(FTE_PEXT_CSQC)
+static int EntityFrameCSQC_AllocFrame(client_t *client, int framenum)
+{
+	int ringfirst = client->csqcentityframehistory_next; // oldest entry
+	client->csqcentityframehistory_next += 1;
+	client->csqcentityframehistory_next %= NUM_CSQCENTITYDB_FRAMES;
+	client->csqcentityframehistory[ringfirst].framenum = framenum;
+	client->csqcentityframehistory[ringfirst].num = 0;
+	return ringfirst;
+}
+
+static void EntityFrameCSQC_DeallocFrame(client_t *client, int framenum)
+{
+	int ringfirst = client->csqcentityframehistory_next; // oldest entry
+	int ringlast = (ringfirst + NUM_CSQCENTITYDB_FRAMES - 1) % NUM_CSQCENTITYDB_FRAMES; // most recently added entry
+	if (framenum == client->csqcentityframehistory[ringlast].framenum)
+	{
+		client->csqcentityframehistory[ringlast].framenum = -1;
+		client->csqcentityframehistory[ringlast].num = 0;
+		client->csqcentityframehistory_next = ringlast;
+	}
+	else
+		Con_Printf("Trying to dealloc the wrong entity frame\n");
+}
+#endif
+
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+int SV_SimpleProjectileWriteFrame_Sproj(client_t *client, struct sizebuf_s *msg, int maxsize, int entlist_size, const unsigned short *entlist)
+{
+	int num, number, end, sendflags;
+	const unsigned short *entnum;
+	edict_t *ed;
+
+	client->csqc_framenum++;
+	int dbframe = EntityFrameCSQC_AllocFrame(client, client->csqc_framenum);
+	csqcentityframedb_t *db = &client->csqcentityframehistory[dbframe];
+	if (client->csqcentityframe_lastreset < 0)
+		client->csqcentityframe_lastreset = client->csqc_framenum;
+
+
+
+	int sectionstarted = false;
+
+	maxsize -= 24;
+
+
+	if (msg->cursize + 32 >= maxsize)
+		return false;
+
+	// blind check to make sure we can't miss any potential csqc ents
+	if (client->csqcnumedicts < sv.num_edicts)
+		client->csqcnumedicts = sv.num_edicts;
+
+	number = 1;
+	for (num = 0, entnum = entlist; num < entlist_size; num++, entnum++)
+	{
+		// cleanup old ents
+		end = *entnum;
+		for (; number < end; number++)
+		{
+			client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+			if (client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING)
+				client->csqcentityscope[number] |= SCOPE_WANTREMOVE;
+			client->csqcentitysendflags[number] = 0xFFFFFF;
+		}
+
+		ed = EDICT_NUM(number);//sv.edicts + number;
+		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+		if (ed->v.movetype == MOVETYPE_FLYMISSILE)
+		{
+			client->csqcentityscope[number] |= SCOPE_WANTUPDATE;
+		}
+		else
+		{
+			if (client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING)
+				client->csqcentityscope[number] |= SCOPE_WANTREMOVE;
+			client->csqcentitysendflags[number] = 0xFFFFFF;
+		}
+		number++;
+	}
+	end = client->csqcnumedicts;
+	for (; number < end; number++)
+	{
+		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+		if (client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING)
+			client->csqcentityscope[number] |= SCOPE_WANTREMOVE;
+		client->csqcentitysendflags[number] = 0xFFFFFF;
+	}
+
+
+	end = client->csqcnumedicts;
+
+	for (number = 1; number < end; number++)
+	{
+		if (!(client->csqcentityscope[number] & SCOPE_WANTSEND))
+			continue;
+
+		if (db->num >= NUM_CSQCENTITIES_PER_FRAME)
+			break;
+		ed = EDICT_NUM(number);//sv.edicts + number;
+		if (client->csqcentityscope[number] & SCOPE_WANTREMOVE)  // Also implies ASSUMED_EXISTING.
+		{
+			//Con_Printf("csqc ent removal\n");
+
+			// A removal. SendFlags have no power here.
+			// write a remove message
+			// first write the message identifier if needed
+			if (!sectionstarted)
+			{
+				sectionstarted = 1;
+				MSG_WriteByte(msg, svc_packetsprojectiles);
+				MSG_WriteLong(msg, client->csqc_framenum);
+			}
+			// write the remove message
+			{
+				MSG_WriteShort(msg, (unsigned short)number | 0x8000);
+				client->csqcentityscope[number] &= ~(SCOPE_WANTSEND | SCOPE_ASSUMED_EXISTING);
+				client->csqcentitysendflags[number] = 0xFFFFFF; // resend completely if it becomes active again
+				db->entno[db->num] = number;
+				db->sendflags[db->num] = -1;
+				db->num += 1;
+			}
+			if (msg->cursize + 17 >= maxsize)
+				break;
+		}
+		else
+		{
+			// save the cursize value in case we overflow and have to rollback
+			int oldcursize = msg->cursize;
+
+			// An update.
+			sendflags = client->csqcentitysendflags[number];
+			// Nothing to send? FINE.
+			if (!sendflags)
+				continue;
+
+			if (!sectionstarted)
+			{
+				MSG_WriteByte(msg, svc_packetsprojectiles);
+				MSG_WriteLong(msg, client->csqc_framenum);
+
+				sectionstarted = 1;
+			}
+
+			// If it's a new entity, always assume sendflags 0xFFFFFF.
+			if (!(client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING))
+				sendflags = 0xFFFFFF;
+
+			//Con_Printf("csqc ent update %i\n", sendflags);
+
+
+			MSG_WriteShort(msg, (unsigned short)number);
+			msg->allowoverflow = true;
+
+			MSG_WriteShort(msg, (unsigned short)sendflags);
+			///*
+			if (sendflags & U_ORIGIN1)
+			{
+				MSG_WriteFloat(msg, ed->v.origin[0]);
+				MSG_WriteFloat(msg, ed->v.origin[1]);
+				MSG_WriteFloat(msg, ed->v.origin[2]);
+
+				MSG_WriteFloat(msg, ed->v.velocity[0]);
+				MSG_WriteFloat(msg, ed->v.velocity[1]);
+				MSG_WriteFloat(msg, ed->v.velocity[2]);
+			}
+
+			if (sendflags & U_ANGLE1)
+			{
+				MSG_WriteAngle(msg, ed->v.angles[0]);
+				MSG_WriteAngle(msg, ed->v.angles[1]);
+				MSG_WriteAngle(msg, ed->v.angles[2]);
+			}
+
+			if (sendflags & U_MODEL)
+			{
+				MSG_WriteShort(msg, ed->v.modelindex);
+				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v.owner)));
+			}
+
+			if (sendflags & U_ORIGIN3)
+			{
+				MSG_WriteByte(msg, (int)(EdictFieldFloat(ed, fofs_client_time) * 255) & 255);
+			}
+			//*/
+
+
+			msg->allowoverflow = false;
+
+			if (msg->cursize + 2 <= maxsize)
+			{
+				// an update has been successfully written
+				client->csqcentitysendflags[number] = 0;
+				//db->entno[db->num] = number;
+				//db->sendflags[db->num] = sendflags;
+				//db->num += 1;
+				client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+				client->csqcentityscope[number] |= SCOPE_EXISTED_ONCE | SCOPE_ASSUMED_EXISTING;
+				db->entno[db->num] = number;
+				db->sendflags[db->num] = sendflags;
+				db->num += 1;
+
+				if (msg->cursize + 17 >= maxsize)
+					break;
+				continue;
+			}
+
+
+
+			// update was too big for this packet - rollback the buffer to its
+			// state before the writes occurred, we'll try again next frame
+			msg->cursize = oldcursize;
+			msg->overflowed = false;
+		}
+	}
+
+
+	if (!sectionstarted)
+	{
+		sectionstarted = 1;
+		MSG_WriteByte(msg, svc_packetsprojectiles);
+		MSG_WriteLong(msg, client->csqc_framenum);
+	}
+
+	if (sectionstarted)
+	{
+		// write index 0 to end the update (0 is never used by real entities)
+		MSG_WriteShort(msg, 0);
+	}
+
+
+	if (db->num == 0)
+		EntityFrameCSQC_DeallocFrame(client, client->csqc_framenum);
+
+	return sectionstarted;
+}
+
+int SV_PrepareEntity_Sproj(edict_t *ent, entity_state_t *cs, int enumber)
+{
+	//unsigned int sendentity;
+	unsigned int sendflags;
+	int i;
+
+	if (ent->v.movetype != MOVETYPE_FLYMISSILE)
+		return false;
+
+	if (ent->v.angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v.angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v.angles[2] != sv.simple_projectiles[enumber].angles[2])
+	{
+		VectorCopy(ent->v.angles, sv.simple_projectiles[enumber].angles);
+		sendflags |= U_ANGLE1;
+	}
+
+	if (ent->v.velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v.velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v.velocity[2] != sv.simple_projectiles[enumber].velocity[2])
+	{
+		VectorCopy(ent->v.velocity, sv.simple_projectiles[enumber].velocity);
+		VectorCopy(ent->v.origin, sv.simple_projectiles[enumber].origin);
+		sendflags |= (U_ORIGIN1 | U_ORIGIN2);
+	}
+
+	if (ent->v.modelindex != sv.simple_projectiles[enumber].modelindex)
+	{
+		sv.simple_projectiles[enumber].modelindex = ent->v.modelindex;
+		sendflags |= U_MODEL;
+
+
+		if (fofs_client_time)
+		{
+			float antilag_trailtime = EdictFieldFloat(ent, fofs_client_time);
+			if (antilag_trailtime)
+				sendflags |= U_ORIGIN3;
+		}
+	}
+
+	for (i = 0; i < MAX_CLIENTS; i++)
+		svs.clients[i].csqcentitysendflags[enumber] |= sendflags;
+
+	return true;
+}
+
+void SV_PrepareEntitiesForSending_Sproj(void)
+{
+	/*
+	int e = 0;
+	edict_t *ent;
+
+	for (e = pr_nqprogs ? 1 : MAX_CLIENTS + 1, ent = EDICT_NUM(e); e < sv.num_edicts; e++, ent = NEXT_EDICT(ent))
+	{
+		//memset(state, 0, sizeof(*state));
+		SV_PrepareEntity_Sproj(ent, NULL, e);
+	}
+	*/
+}
+#endif
+
+#ifdef FTE_PEXT_CSQC
+int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, int maxsize, int entlist_size, const unsigned short *entlist)
+{
+	int num, number, end, sendflags;
+	const unsigned short *entnum;
+	edict_t *ed;
+
+	client->csqc_framenum++;
+	int dbframe = EntityFrameCSQC_AllocFrame(client, client->csqc_framenum);
+	csqcentityframedb_t *db = &client->csqcentityframehistory[dbframe];
+	if (client->csqcentityframe_lastreset < 0)
+		client->csqcentityframe_lastreset = client->csqc_framenum;
+
+
+
+	int sectionstarted = false;
+
+	maxsize -= 24;
+
+
+	if (msg->cursize + 32 >= maxsize)
+		return false;
+
+	// blind check to make sure we can't miss any potential csqc ents
+	if (client->csqcnumedicts < sv.num_edicts)
+		client->csqcnumedicts = sv.num_edicts;
+
+	number = 1;
+	for (num = 0, entnum = entlist; num < entlist_size; num++, entnum++)
+	{
+		// cleanup old ents
+		end = *entnum;
+		for (; number < end; number++)
+		{
+			client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+			if (client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING)
+				client->csqcentityscope[number] |= SCOPE_WANTREMOVE;
+			client->csqcentitysendflags[number] = 0xFFFFFF;
+		}
+
+		ed = EDICT_NUM(number);//sv.edicts + number;
+		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+		if (ed->v.movetype == MOVETYPE_FLYMISSILE)
+		{
+			client->csqcentityscope[number] |= SCOPE_WANTUPDATE;
+		}
+		else
+		{
+			if (client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING)
+				client->csqcentityscope[number] |= SCOPE_WANTREMOVE;
+			client->csqcentitysendflags[number] = 0xFFFFFF;
+		}
+		number++;
+	}
+	end = client->csqcnumedicts;
+	for (; number < end; number++)
+	{
+		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+		if (client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING)
+			client->csqcentityscope[number] |= SCOPE_WANTREMOVE;
+		client->csqcentitysendflags[number] = 0xFFFFFF;
+	}
+
+
+	end = client->csqcnumedicts;
+
+	for (number = 1; number < end; number++)
+	{
+		if (!(client->csqcentityscope[number] & SCOPE_WANTSEND))
+			continue;
+
+		if (db->num >= NUM_CSQCENTITIES_PER_FRAME)
+			break;
+		ed = EDICT_NUM(number);//sv.edicts + number;
+		if (client->csqcentityscope[number] & SCOPE_WANTREMOVE)  // Also implies ASSUMED_EXISTING.
+		{
+			//Con_Printf("csqc ent removal\n");
+
+			// A removal. SendFlags have no power here.
+			// write a remove message
+			// first write the message identifier if needed
+			if (!sectionstarted)
+			{
+				sectionstarted = 1;
+				MSG_WriteByte(msg, svc_packetsprojectiles);
+				MSG_WriteLong(msg, client->csqc_framenum);
+			}
+			// write the remove message
+			{
+				MSG_WriteShort(msg, (unsigned short)number | 0x8000);
+				client->csqcentityscope[number] &= ~(SCOPE_WANTSEND | SCOPE_ASSUMED_EXISTING);
+				client->csqcentitysendflags[number] = 0xFFFFFF; // resend completely if it becomes active again
+				db->entno[db->num] = number;
+				db->sendflags[db->num] = -1;
+				db->num += 1;
+			}
+			if (msg->cursize + 17 >= maxsize)
+				break;
+		}
+		else
+		{
+			// save the cursize value in case we overflow and have to rollback
+			int oldcursize = msg->cursize;
+
+			// An update.
+			sendflags = client->csqcentitysendflags[number];
+			// Nothing to send? FINE.
+			if (!sendflags)
+				continue;
+
+			if (!sectionstarted)
+			{
+				MSG_WriteByte(msg, svc_packetsprojectiles);
+				MSG_WriteLong(msg, client->csqc_framenum);
+
+				sectionstarted = 1;
+			}
+
+			// If it's a new entity, always assume sendflags 0xFFFFFF.
+			if (!(client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING))
+				sendflags = 0xFFFFFF;
+
+			//Con_Printf("csqc ent update %i\n", sendflags);
+
+
+			MSG_WriteShort(msg, (unsigned short)number);
+			msg->allowoverflow = true;
+
+			MSG_WriteShort(msg, (unsigned short)sendflags);
+			///*
+			if (sendflags & U_ORIGIN1)
+			{
+				MSG_WriteFloat(msg, ed->v.origin[0]);
+				MSG_WriteFloat(msg, ed->v.origin[1]);
+				MSG_WriteFloat(msg, ed->v.origin[2]);
+
+				MSG_WriteFloat(msg, ed->v.velocity[0]);
+				MSG_WriteFloat(msg, ed->v.velocity[1]);
+				MSG_WriteFloat(msg, ed->v.velocity[2]);
+			}
+
+			if (sendflags & U_ANGLE1)
+			{
+				MSG_WriteAngle(msg, ed->v.angles[0]);
+				MSG_WriteAngle(msg, ed->v.angles[1]);
+				MSG_WriteAngle(msg, ed->v.angles[2]);
+			}
+
+			if (sendflags & U_MODEL)
+			{
+				MSG_WriteShort(msg, ed->v.modelindex);
+				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v.owner)));
+			}
+
+			if (sendflags & U_ORIGIN3)
+			{
+				MSG_WriteByte(msg, (int)(EdictFieldFloat(ed, fofs_client_time) * 255) & 255);
+			}
+			//*/
+
+
+			msg->allowoverflow = false;
+
+			if (msg->cursize + 2 <= maxsize)
+			{
+				// an update has been successfully written
+				client->csqcentitysendflags[number] = 0;
+				//db->entno[db->num] = number;
+				//db->sendflags[db->num] = sendflags;
+				//db->num += 1;
+				client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
+				client->csqcentityscope[number] |= SCOPE_EXISTED_ONCE | SCOPE_ASSUMED_EXISTING;
+				db->entno[db->num] = number;
+				db->sendflags[db->num] = sendflags;
+				db->num += 1;
+
+				if (msg->cursize + 17 >= maxsize)
+					break;
+				continue;
+			}
+
+
+
+			// update was too big for this packet - rollback the buffer to its
+			// state before the writes occurred, we'll try again next frame
+			msg->cursize = oldcursize;
+			msg->overflowed = false;
+		}
+	}
+
+
+	if (!sectionstarted)
+	{
+		sectionstarted = 1;
+		MSG_WriteByte(msg, svc_packetsprojectiles);
+		MSG_WriteLong(msg, client->csqc_framenum);
+	}
+
+	if (sectionstarted)
+	{
+		// write index 0 to end the update (0 is never used by real entities)
+		MSG_WriteShort(msg, 0);
+	}
+
+
+	if (db->num == 0)
+		EntityFrameCSQC_DeallocFrame(client, client->csqc_framenum);
+
+	return sectionstarted;
+}
+
+int SV_PrepareEntity_CSQC(edict_t *ent, entity_state_t *cs, int enumber)
+{
+	//unsigned int sendentity;
+	unsigned int sendflags;
+	int i;
+
+	if (ent->v.movetype != MOVETYPE_FLYMISSILE)
+		return false;
+
+	if (ent->v.angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v.angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v.angles[2] != sv.simple_projectiles[enumber].angles[2])
+	{
+		VectorCopy(ent->v.angles, sv.simple_projectiles[enumber].angles);
+		sendflags |= U_ANGLE1;
+	}
+
+	if (ent->v.velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v.velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v.velocity[2] != sv.simple_projectiles[enumber].velocity[2])
+	{
+		VectorCopy(ent->v.velocity, sv.simple_projectiles[enumber].velocity);
+		VectorCopy(ent->v.origin, sv.simple_projectiles[enumber].origin);
+		sendflags |= (U_ORIGIN1 | U_ORIGIN2);
+	}
+
+	if (ent->v.modelindex != sv.simple_projectiles[enumber].modelindex)
+	{
+		sv.simple_projectiles[enumber].modelindex = ent->v.modelindex;
+		sendflags |= U_MODEL;
+
+
+		if (fofs_client_time)
+		{
+			float antilag_trailtime = EdictFieldFloat(ent, fofs_client_time);
+			if (antilag_trailtime)
+				sendflags |= U_ORIGIN3;
+		}
+	}
+
+	for (i = 0; i < MAX_CLIENTS; i++)
+		svs.clients[i].csqcentitysendflags[enumber] |= sendflags;
+
+	return true;
+}
+#endif
+
+
+#if defined(MVD_PEXT1_SIMPLEPROJECTILE) || defined(FTE_PEXT_CSQC)
+void EntityFrameCSQC_LostFrame(client_t *client, int framenum)
+{
+	// marks a frame as lost
+	int i, j;
+	qbool valid;
+	int ringfirst, ringlast;
+	static int recoversendflags[MAX_EDICTS]; // client only
+	csqcentityframedb_t *d;
+
+	if (client->csqcentityframe_lastreset < 0)
+		return;
+	if (framenum < client->csqcentityframe_lastreset)
+		return; // no action required, as we resent that data anyway
+
+	// is our frame out of history?
+	ringfirst = client->csqcentityframehistory_next; // oldest entry
+	ringlast = (ringfirst + NUM_CSQCENTITYDB_FRAMES - 1) % NUM_CSQCENTITYDB_FRAMES; // most recently added entry
+
+	valid = false;
+
+	for (j = 0; j < NUM_CSQCENTITYDB_FRAMES; ++j)
+	{
+		d = &client->csqcentityframehistory[(ringfirst + j) % NUM_CSQCENTITYDB_FRAMES];
+		if (d->framenum < 0)
+			continue;
+		if (d->framenum == framenum)
+			break;
+		else if (d->framenum < framenum)
+			valid = true;
+	}
+	if (j == NUM_CSQCENTITYDB_FRAMES)
+	{
+		if (valid) // got beaten, i.e. there is a frame < framenum
+		{
+			// a non-csqc frame got lost... great
+			return;
+		}
+		else
+		{
+			// a too old frame got lost... sorry, cannot handle this
+			Con_DPrintf("CSQC entity DB: lost a frame too early to do any handling (resending ALL)...\n");
+			Con_DPrintf("Lost frame = %d\n", framenum);
+			Con_DPrintf("Entity DB = %d to %d\n", client->csqcentityframehistory[ringfirst].framenum, client->csqcentityframehistory[ringlast].framenum);
+			//EntityFrameCSQC_LostAllFrames(client);
+			client->csqcentityframe_lastreset = -1;
+		}
+		return;
+	}
+
+	// so j is the frame that got lost
+	// ringlast is the frame that we have to go to
+	ringfirst = (ringfirst + j) % NUM_CSQCENTITYDB_FRAMES;
+	if (ringlast < ringfirst)
+		ringlast += NUM_CSQCENTITYDB_FRAMES;
+
+	memset(recoversendflags, 0, sizeof(recoversendflags));
+
+	for (j = ringfirst; j <= ringlast; ++j)
+	{
+		d = &client->csqcentityframehistory[j % NUM_CSQCENTITYDB_FRAMES];
+		if (d->framenum < 0)
+		{
+			// deleted frame
+		}
+		else if (d->framenum < framenum)
+		{
+			// a frame in the past... should never happen
+			Con_Printf("CSQC entity DB encountered a frame from the past when recovering from PL...?\n");
+		}
+		else if (d->framenum == framenum)
+		{
+			// handling the actually lost frame now
+			for (i = 0; i < d->num; ++i)
+			{
+				int sf = d->sendflags[i];
+				int ent = d->entno[i];
+				if (sf < 0) // remove
+					recoversendflags[ent] |= -1; // all bits, including sign
+				else if (sf > 0)
+					recoversendflags[ent] |= sf;
+			}
+		}
+		else
+		{
+			// handling the frames that followed it now
+			for (i = 0; i < d->num; ++i)
+			{
+				int sf = d->sendflags[i];
+				int ent = d->entno[i];
+				if (sf < 0) // remove
+				{
+					recoversendflags[ent] = 0; // no need to update, we got a more recent remove (and will fix it THEN)
+					break; // no flags left to remove...
+				}
+				else if (sf > 0)
+					recoversendflags[ent] &= ~sf; // no need to update these bits, we already got them later
+			}
+		}
+	}
+
+	for (i = 0; i < client->csqcnumedicts; ++i)
+	{
+		if (recoversendflags[i] < 0)
+			client->csqcentityscope[i] |= SCOPE_ASSUMED_EXISTING;  // FORCE REMOVE.
+		else
+			client->csqcentitysendflags[i] |= recoversendflags[i];
+	}
+}
+#endif
+
+
+
 /*
 =============
 SV_WriteEntitiesToClient
@@ -828,6 +1496,7 @@ void SV_WriteEntitiesToClient (client_t *client, sizebuf_t *msg, qbool recorder)
 	int hideent;
 	unsigned int client_flag = (1 << (client - svs.clients));
 	edict_t	*clent = client->edict;
+	int numcsqcsendstates;
 
 	float distances[MAX_PACKETENTITIES_POSSIBLE] = { 0 };
 	float distance;
@@ -906,6 +1575,9 @@ void SV_WriteEntitiesToClient (client_t *client, sizebuf_t *msg, qbool recorder)
 	// put other visible entities into either a packet_entities or a nails message
 	pack = &frame->entities;
 	pack->num_entities = 0;
+	#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+	numcsqcsendstates = 0;
+	#endif
 
 	numnails = 0;
 
@@ -933,6 +1605,30 @@ void SV_WriteEntitiesToClient (client_t *client, sizebuf_t *msg, qbool recorder)
 			if (e == hideent) {
 				continue;
 			}
+
+			#if MVD_PEXT1_SIMPLEPROJECTILE
+			if (client->mvdprotocolextensions1 & MVD_PEXT1_SIMPLEPROJECTILE && !recorder)
+			{
+				if (SV_PrepareEntity_Sproj(ent, state, e))
+				{
+					sv.csqcsendstates[numcsqcsendstates++] = e;
+					continue;
+				}
+			}
+			#endif
+			#if defined(MVD_PEXT1_SIMPLEPROJECTILE) && defined(FTE_PEXT_CSQC)
+			else
+			#endif
+			#ifdef FTE_PEXT_CSQC
+			if (client->fteprotocolextensions & FTE_PEXT_CSQC && !recorder)
+			{
+				if (SV_PrepareEntity_CSQC(ent, state, e))
+				{
+					sv.csqcsendstates[numcsqcsendstates++] = e;
+					continue;
+				}
+			}
+			#endif
 
 			if (SV_AddNailUpdate (ent))
 				continue; // added to the special update list
@@ -998,6 +1694,13 @@ void SV_WriteEntitiesToClient (client_t *client, sizebuf_t *msg, qbool recorder)
 	// last packetentities acknowledged by the client
 
 	SV_EmitPacketEntities (client, pack, msg);
+
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+	if (client->mvdprotocolextensions1 & MVD_PEXT1_SIMPLEPROJECTILE && !recorder)
+	{
+		SV_SimpleProjectileWriteFrame_Sproj(client, msg, msg->maxsize, numcsqcsendstates, sv.csqcsendstates);
+	}
+#endif
 
 	// now add the specialized nail update
 	SV_EmitNailUpdate (msg, recorder);

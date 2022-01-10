@@ -70,6 +70,7 @@ typedef struct edict_s
 							// but this way it more friendly, I think.
 
 	entvars_t	v;			// C exported fields from progs
+
 	// other fields from progs come immediately after
 } edict_t;
 

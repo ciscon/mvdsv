@@ -44,7 +44,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MVD_PEXT1_FLOATCOORDS       0x00000001 // FTE_PEXT_FLOATCOORDS but for entity/player coords only
 #define MVD_PEXT1_HIGHLAGTELEPORT   0x00000002 // Adjust movement direction for frames following teleport
 #define MVD_PEXT1_SERVERSIDEWEAPON  0x00000004 // Server-side weapon selection
-#define	MVD_PEXT1_WEAPONPREDICTION	0x00000080 // Reki weapon prediction
+#define	MVD_PEXT1_WEAPONPREDICTION	0x00000080 // Weapon prediction
+#define	MVD_PEXT1_SIMPLEPROJECTILE	0x00000100 // Simple projectiles
 
 //===============================================
 
@@ -78,6 +79,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define FTE_PEXT_SPAWNSTATIC2		0x00400000	//Sends an entity delta instead of a baseline.
 #define FTE_PEXT_256PACKETENTITIES	0x01000000	//Client can recieve 256 packet entities.
 #define FTE_PEXT_CHUNKEDDOWNLOADS	0x20000000	//alternate file download method. Hopefully it'll give quadroupled download speed, especially on higher pings.
+#define FTE_PEXT_CSQC				0x40000000	//csqc additions
+
 
 #endif // PROTOCOL_VERSION_FTE
 
@@ -97,7 +100,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MVD_PEXT1_DEBUG_ANTILAG     (1 << 4) // Send predicted positions to server (compare to antilagged positions)
 #define MVD_PEXT1_HIDDEN_MESSAGES   (1 << 5) // dem_multiple(0) packets are in format (<length> <type-id>+ <packet-data>)*
 #define MVD_PEXT1_SERVERSIDEWEAPON2 (1 << 6) // Server-side weapon selection supports clc_mvd_weapon_full_impulse
-#define	MVD_PEXT1_WEAPONPREDICTION	(1 << 7) // Reki weapon prediction
+#define	MVD_PEXT1_WEAPONPREDICTION	(1 << 7) // Weapon prediction
+#define	MVD_PEXT1_SIMPLEPROJECTILE	(1 << 8) // Simple projectiles
 
 #if defined(MVD_PEXT1_DEBUG_ANTILAG) || defined(MVD_PEXT1_DEBUG_WEAPON)
 #define MVD_PEXT1_DEBUG
@@ -267,6 +271,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define svc_fte_voicechat	    84 		// FTE voice chat.
 #endif
 
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+#define	svc_packetsprojectiles		100		// [...]
+#define	svc_deltapacketsprojectiles	101		// [...]
+#endif
+
 //==============================================
 
 //
@@ -280,6 +289,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	clc_delta		5		// [byte] sequence number, requests delta compression of message
 #define clc_tmove		6		// teleport request, spectator only
 #define clc_upload		7		//
+
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+#define clc_ackframe	50
+#endif
 
 #ifdef FTE_PEXT2_VOICECHAT
 #define clc_voicechat	83		// FTE voice chat.
@@ -505,6 +518,23 @@ typedef struct entity_state_s
 #endif
 } entity_state_t;
 
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+#define MAX_SIMPLEPROJECTILES	64
+typedef struct sprojectile_state_s
+{
+	int		number;			// edict index
+	int		flags;			// nolerp, etc
+	int		sflag;
+	int		owner;
+
+	float	time;
+	vec3_t	origin;
+	vec3_t	angles;
+	int		modelindex;
+	vec3_t	velocity;
+} sprojectile_state_t;
+#endif
+
 #define	MAX_PACKET_ENTITIES	64	// doesn't count nails
 #define MAX_PEXT256_PACKET_ENTITIES 256 // up to 256 ents, look FTE_PEXT_256PACKETENTITIES
 #define MAX_MVD_PACKET_ENTITIES 300 // !!! MUST not be less than any of above values!!!
@@ -513,6 +543,10 @@ typedef struct packet_entities_s
 {
 	int		num_entities;
 	entity_state_t	entities[MAX_MVD_PACKET_ENTITIES];
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+	int		num_sprojectiles;
+	sprojectile_state_t sprojectiles[MAX_SIMPLEPROJECTILES];
+#endif
 } packet_entities_t;
 
 typedef struct usercmd_s

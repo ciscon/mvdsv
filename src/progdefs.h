@@ -159,6 +159,11 @@ typedef struct
 	string_t	noise3;
 } entvars_t;
 
+typedef struct extentvars_s
+{
+	int			SendFlags;
+} extentvars_t;
+
 #define PROGHEADER_CRC 54730
 
 #endif /* !__PROGDEFS_H__ */

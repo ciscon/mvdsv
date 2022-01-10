@@ -2367,6 +2367,42 @@ void PF2_FS_GetFileList(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*re
 		Q_free(list[i]);
 }
 
+
+
+
+
+
+/*
+  qvmextensions
+*/
+void PF2_SetExtField(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
+{
+
+
+
+}
+
+
+void PF2_GetExtField(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
+{
+
+
+
+}
+
+
+struct
+{
+	char			*extname;
+	pr2_trapcall_t	trap;
+} qvmextensions[] =
+{
+	{"SetExtField",			PF2_SetExtField},
+	{"GetExtField",			PF2_GetExtField},
+	{NULL, NULL}
+};
+
+
 /*
   int trap_Map_Extension( const char* ext_name, int mapto)
   return:
@@ -2375,16 +2411,40 @@ void PF2_FS_GetFileList(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*re
    -2	cannot map
 */
 extern int pr2_numAPI;
+extern pr2_trapcall_t pr2_API[];
 void PF2_Map_Extension(byte* base, uintptr_t mask, pr2val_t* stack, pr2val_t*retval)
 {
-	int mapto	= stack[1]._int;
+	char *extname = VM_POINTER(base, mask, stack[0].string);
+	int mapto = stack[1]._int;
+	int i;
 
-	if( mapto <  pr2_numAPI)
+
+	if(mapto < pr2_numAPI)
 	{
-
 		retval->_int = -2;
 		return;
 	}
+
+
+	if (!extname)
+	{
+		retval->_int = -1;
+		if (mapto < G_MAX)
+			retval->_int = -2;
+		return;
+	}
+
+
+	for (i = 0; qvmextensions[i].extname; i++)
+	{
+		if (!strcasecmp(extname, qvmextensions[i].extname))
+		{
+			pr2_API[mapto] = qvmextensions[i].trap;
+			retval->_int = mapto;
+			return;
+		}
+	}
+
 
 	retval->_int = -1;
 }
@@ -2844,7 +2904,7 @@ void PF2_SetUserInfo( byte * base, uintptr_t mask, pr2val_t * stack, pr2val_t * 
 // SysCalls
 //===========================================================================
 
-pr2_trapcall_t pr2_API[]=
+pr2_trapcall_t pr2_API[512]=
     {
         PF2_GetApiVersion, 	//G_GETAPIVERSION
         PF2_DPrint,        	//G_DPRINT
@@ -2941,6 +3001,9 @@ pr2_trapcall_t pr2_API[]=
 		PF2_MoveToGoal,		//G_MOVETOGOAL
     };
 int pr2_numAPI = sizeof(pr2_API)/sizeof(pr2_API[0]);
+
+
+
 
 intptr_t sv_syscall(intptr_t arg, ...) //must passed ints
 {

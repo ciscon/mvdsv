@@ -474,12 +474,7 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 	}
 #endif
 #ifdef MVD_PEXT1_SIMPLEPROJECTILE
-	if (TRUE) {
-		svs.mvdprotocolextension1 |= MVD_PEXT1_SIMPLEPROJECTILE;
-	}
-	else {
-		svs.mvdprotocolextension1 &= ~MVD_PEXT1_SIMPLEPROJECTILE;
-	}
+	svs.mvdprotocolextension1 |= MVD_PEXT1_SIMPLEPROJECTILE;
 #endif
 #ifdef FTE_PEXT_CSQC
 	svs.fteprotocolextensions |= FTE_PEXT_CSQC;

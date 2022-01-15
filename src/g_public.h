@@ -218,6 +218,7 @@ typedef enum
 	GAME_CLIENT_SAY,			// ( int isTeamSay );
 	GAME_PAUSED_TIC,			// ( int duration_msec );	// duration is in msecs
 	GAME_CLEAR_EDICT,           // (self)
+	GAME_EDICT_CSQCSEND,		// (self,other,int sendflags)
 } gameExport_t;
 
 

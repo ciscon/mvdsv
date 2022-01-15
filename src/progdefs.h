@@ -159,9 +159,30 @@ typedef struct
 	string_t	noise3;
 } entvars_t;
 
+
+
+#define PVSF_IGNOREPVS	3
+
+#define svextqcfields \
+	comfieldfunction(SendEntity, ".float(entity playerent, float changedflags)")/*FTE_PEXT_CSQC*/\
+	comfieldfloat(SendFlags)/*FTE_PEXT_CSQC*/\
+	comfieldfloat(pvsflags)/*FTE_PEXT_CSQC*/
+
 typedef struct extentvars_s
 {
-	int			SendFlags;
+#define comfieldfloat(name) float name;
+#define comfieldint(name) int name;
+#define comfieldvector(name) vec3_t name;
+#define comfieldentity(name) unsigned int name;
+#define comfieldstring(name) string_t name;
+#define comfieldfunction(name,typestr) func_t name;
+	svextqcfields
+#undef comfieldfloat
+#undef comfieldint
+#undef comfieldvector
+#undef comfieldentity
+#undef comfieldstring
+#undef comfieldfunction
 } extentvars_t;
 
 #define PROGHEADER_CRC 54730

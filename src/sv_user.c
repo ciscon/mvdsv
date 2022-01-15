@@ -352,6 +352,13 @@ static void Cmd_New_f (void)
 	}
 #endif
 
+#ifdef FTE_PEXT_CSQC
+	if (sv_client->fteprotocolextensions & FTE_PEXT_CSQC) {
+		SV_ClientPrintf(sv_client, 2, "\n\nENABLING CSQC FOR YOU!\nYOU'RE WELCOME\n");
+		sv_client->csqcactive = true;
+	}
+#endif
+
 	//NOTE:  This doesn't go through ClientReliableWrite since it's before the user
 	//spawns.  These functions are written to not overflow
 	if (sv_client->num_backbuf)
@@ -1419,6 +1426,10 @@ static void Cmd_Download_f(void)
 
 	if (sv_client->special)
 		allow_dl = true; // NOTE: user used techlogin, allow dl anything in quake dir in such case!
+#ifdef FTE_PEXT_CSQC
+	else if (!strncmp(name, "csprogs.dat", 11))
+		allow_dl = true;
+#endif //_CSQC
 	else if (!strstr(name, "/"))
 		allow_dl = false; // should be in subdir
 	else if (!(int)allow_download.value)
@@ -3045,6 +3056,28 @@ void SV_Voice_UnmuteAll_f(void)
 
 #endif // FTE_PEXT2_VOICECHAT
 
+
+#ifdef FTE_PEXT_CSQC
+void SV_EnableClientsCSQC(void)
+{
+	size_t e;
+
+	sv_client->csqcactive = true;
+
+	//if the csqc has just restarted, its probably going to want us to resend all csqc ents from scratch because of all the setup it might do.
+	for (e = 1; e < MAX_EDICTS; e++)
+		if (sv_client->csqcentityscope[e] & SCOPE_WANTSEND)
+			sv_client->csqcentitysendflags[e] = 0xFFFFFF;
+}
+void SV_DisableClientsCSQC(void)
+{
+#ifdef FTE_PEXT_CSQC
+	sv_client->csqcactive = false;
+#endif
+}
+#endif // FTE_PEXT_CSQC
+
+
 /*
  * Parse protocol extensions which supported by client.
  * This is workaround for the proxy case, like: qwfwd. We can't use it in case of qizmo thought.
@@ -3294,6 +3327,10 @@ static ucmd_t ucmds[] =
 	{"vignore", SV_Voice_Ignore_f, false},	/*ignore/mute specific player*/
 	{"muteall", SV_Voice_MuteAll_f, false},	/*disables*/
 	{"unmuteall", SV_Voice_UnmuteAll_f, false}, /*reenables*/
+#endif
+#ifdef FTE_PEXT_CSQC
+	{"enablecsqc",	SV_EnableClientsCSQC, false},
+	{"disablecsqc",	SV_DisableClientsCSQC, false},
 #endif
 
 	{"pext", Cmd_PEXT_f, false}, // user reply with supported protocol extensions.
@@ -4476,6 +4513,19 @@ void SV_ExecuteClientMessage (client_t *cl)
 
 	seq_hash = cl->netchan.incoming_sequence;
 
+
+#if defined(MVD_PEXT1_SIMPLEPROJECTILE) || defined(FTE_PEXT_CSQC)
+	for (i = sv_client->csqc_latestverified + 1; i < cl->netchan.incoming_acknowledged; i++)
+	{
+		if (!SV_FrameLost(i))
+			break;
+	}
+	SV_FrameAck(cl->netchan.incoming_acknowledged);
+	sv_client->csqc_latestverified = cl->netchan.incoming_acknowledged;
+#endif
+
+
+
 	// mark time so clients will know how much to predict
 	// other players
 	cl->localtime = sv.time;
@@ -4684,7 +4734,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 			num = MSG_ReadLong();
 
 
-			///*
+			/*
 			for (i = sv_client->csqc_latestverified + 1; i < num; i++)
 			{
 				if (!SV_FrameLost(i))

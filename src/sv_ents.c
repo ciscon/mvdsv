@@ -788,6 +788,10 @@ qbool SV_EntityVisibleToClient (client_t* client, int e, byte* pvs)
 			return false;
 	}
 
+	// if pvsflags are set to ignore all
+	if (((int)ent->xv->pvsflags & PVSF_IGNOREPVS) == PVSF_IGNOREPVS)
+		return true;
+
 	// ignore ents without visible models
 	if (!ent->v->modelindex || !*PR_GetEntityString(ent->v->model))
 		return false;
@@ -1089,37 +1093,24 @@ int SV_PrepareEntity_Sproj(edict_t *ent, entity_state_t *cs, int enumber)
 
 	return true;
 }
-
-void SV_PrepareEntitiesForSending_Sproj(void)
-{
-	/*
-	int e = 0;
-	edict_t *ent;
-
-	for (e = pr_nqprogs ? 1 : MAX_CLIENTS + 1, ent = EDICT_NUM(e); e < sv.num_edicts; e++, ent = NEXT_EDICT(ent))
-	{
-		//memset(state, 0, sizeof(*state));
-		SV_PrepareEntity_Sproj(ent, NULL, e);
-	}
-	*/
-}
 #endif
 
 #ifdef FTE_PEXT_CSQC
+sizebuf_t *csqcmsgbuffer;
 int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, int maxsize, int entlist_size, const unsigned short *entlist)
 {
 	int num, number, end, sendflags;
 	const unsigned short *entnum;
 	edict_t *ed;
 
-	client->csqc_framenum++;
+	client->csqc_framenum = client->netchan.incoming_sequence;
 	int dbframe = EntityFrameCSQC_AllocFrame(client, client->csqc_framenum);
 	csqcentityframedb_t *db = &client->csqcentityframehistory[dbframe];
 	if (client->csqcentityframe_lastreset < 0)
 		client->csqcentityframe_lastreset = client->csqc_framenum;
+	
 
-
-
+	csqcmsgbuffer = msg;
 	int sectionstarted = false;
 
 	maxsize -= 24;
@@ -1147,7 +1138,7 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 
 		ed = EDICT_NUM(number);//sv.edicts + number;
 		client->csqcentityscope[number] &= ~SCOPE_WANTSEND;
-		if (ed->v->movetype == MOVETYPE_FLYMISSILE)
+		if (ed->xv->SendEntity)
 		{
 			client->csqcentityscope[number] |= SCOPE_WANTUPDATE;
 		}
@@ -1170,7 +1161,7 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 
 
 	end = client->csqcnumedicts;
-
+	
 	for (number = 1; number < end; number++)
 	{
 		if (!(client->csqcentityscope[number] & SCOPE_WANTSEND))
@@ -1189,8 +1180,8 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 			if (!sectionstarted)
 			{
 				sectionstarted = 1;
-				MSG_WriteByte(msg, svc_packetsprojectiles);
-				MSG_WriteLong(msg, client->csqc_framenum);
+				MSG_WriteByte(msg, svc_fte_csqcentities);
+				//MSG_WriteLong(msg, client->csqc_framenum);
 			}
 			// write the remove message
 			{
@@ -1208,17 +1199,19 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 		{
 			// save the cursize value in case we overflow and have to rollback
 			int oldcursize = msg->cursize;
+			int oldsectionstarted = sectionstarted;
 
 			// An update.
 			sendflags = client->csqcentitysendflags[number];
 			// Nothing to send? FINE.
+
 			if (!sendflags)
 				continue;
 
 			if (!sectionstarted)
 			{
-				MSG_WriteByte(msg, svc_packetsprojectiles);
-				MSG_WriteLong(msg, client->csqc_framenum);
+				MSG_WriteByte(msg, svc_fte_csqcentities);
+				//MSG_WriteLong(msg, client->csqc_framenum);
 
 				sectionstarted = 1;
 			}
@@ -1227,44 +1220,20 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 			if (!(client->csqcentityscope[number] & SCOPE_ASSUMED_EXISTING))
 				sendflags = 0xFFFFFF;
 
-			//Con_Printf("csqc ent update %i\n", sendflags);
 
 
 			MSG_WriteShort(msg, (unsigned short)number);
 			msg->allowoverflow = true;
 
-			MSG_WriteShort(msg, (unsigned short)sendflags);
-			///*
-			if (sendflags & U_ORIGIN1)
+			if (!PR2_SendEntity(ed, client->edict, sendflags))
 			{
-				MSG_WriteFloat(msg, ed->v->origin[0]);
-				MSG_WriteFloat(msg, ed->v->origin[1]);
-				MSG_WriteFloat(msg, ed->v->origin[2]);
+				msg->cursize = oldcursize;
+				sectionstarted = oldsectionstarted;
 
-				MSG_WriteFloat(msg, ed->v->velocity[0]);
-				MSG_WriteFloat(msg, ed->v->velocity[1]);
-				MSG_WriteFloat(msg, ed->v->velocity[2]);
+				client->csqcentitysendflags[number] = 0;
+				msg->allowoverflow = false;
+				continue;
 			}
-
-			if (sendflags & U_ANGLE1)
-			{
-				MSG_WriteAngle(msg, ed->v->angles[0]);
-				MSG_WriteAngle(msg, ed->v->angles[1]);
-				MSG_WriteAngle(msg, ed->v->angles[2]);
-			}
-
-			if (sendflags & U_MODEL)
-			{
-				MSG_WriteShort(msg, ed->v->modelindex);
-				MSG_WriteShort(msg, (int)NUM_FOR_EDICT(PROG_TO_EDICT(ed->v->owner)));
-			}
-
-			if (sendflags & U_ORIGIN3)
-			{
-				MSG_WriteByte(msg, (int)(EdictFieldFloat(ed, fofs_client_time) * 255) & 255);
-			}
-			//*/
-
 
 			msg->allowoverflow = false;
 
@@ -1299,8 +1268,8 @@ int SV_SimpleProjectileWriteFrame_CSQC(client_t *client, struct sizebuf_s *msg, 
 	if (!sectionstarted)
 	{
 		sectionstarted = 1;
-		MSG_WriteByte(msg, svc_packetsprojectiles);
-		MSG_WriteLong(msg, client->csqc_framenum);
+		MSG_WriteByte(msg, svc_fte_csqcentities);
+		//MSG_WriteLong(msg, client->csqc_framenum);
 	}
 
 	if (sectionstarted)
@@ -1322,38 +1291,11 @@ int SV_PrepareEntity_CSQC(edict_t *ent, entity_state_t *cs, int enumber)
 	unsigned int sendflags;
 	int i;
 
-	if (ent->v->movetype != MOVETYPE_FLYMISSILE)
+	if (ent->xv->SendEntity == 0)
 		return false;
 
-	if (ent->v->angles[0] != sv.simple_projectiles[enumber].angles[0] || ent->v->angles[1] != sv.simple_projectiles[enumber].angles[1] || ent->v->angles[2] != sv.simple_projectiles[enumber].angles[2])
-	{
-		VectorCopy(ent->v->angles, sv.simple_projectiles[enumber].angles);
-		sendflags |= U_ANGLE1;
-	}
-
-	if (ent->v->velocity[0] != sv.simple_projectiles[enumber].velocity[0] || ent->v->velocity[1] != sv.simple_projectiles[enumber].velocity[1] || ent->v->velocity[2] != sv.simple_projectiles[enumber].velocity[2])
-	{
-		VectorCopy(ent->v->velocity, sv.simple_projectiles[enumber].velocity);
-		VectorCopy(ent->v->origin, sv.simple_projectiles[enumber].origin);
-		sendflags |= (U_ORIGIN1 | U_ORIGIN2);
-	}
-
-	if (ent->v->modelindex != sv.simple_projectiles[enumber].modelindex)
-	{
-		sv.simple_projectiles[enumber].modelindex = ent->v->modelindex;
-		sendflags |= U_MODEL;
-
-
-		if (fofs_client_time)
-		{
-			float antilag_trailtime = EdictFieldFloat(ent, fofs_client_time);
-			if (antilag_trailtime)
-				sendflags |= U_ORIGIN3;
-		}
-	}
-
-	for (i = 0; i < MAX_CLIENTS; i++)
-		svs.clients[i].csqcentitysendflags[enumber] |= sendflags;
+	//for (i = 0; i < MAX_CLIENTS; i++)
+	//	svs.clients[i].csqcentitysendflags[enumber] |= 65535;//(int)ent->xv->SendFlags;
 
 	return true;
 }
@@ -1620,7 +1562,7 @@ void SV_WriteEntitiesToClient (client_t *client, sizebuf_t *msg, qbool recorder)
 			else
 			#endif
 			#ifdef FTE_PEXT_CSQC
-			if (client->fteprotocolextensions & FTE_PEXT_CSQC && !recorder)
+			if (client->csqcactive && !recorder)
 			{
 				if (SV_PrepareEntity_CSQC(ent, state, e))
 				{
@@ -1694,11 +1636,21 @@ void SV_WriteEntitiesToClient (client_t *client, sizebuf_t *msg, qbool recorder)
 	// last packetentities acknowledged by the client
 
 	SV_EmitPacketEntities (client, pack, msg);
+	
 
 #ifdef MVD_PEXT1_SIMPLEPROJECTILE
 	if (client->mvdprotocolextensions1 & MVD_PEXT1_SIMPLEPROJECTILE && !recorder)
 	{
 		SV_SimpleProjectileWriteFrame_Sproj(client, msg, msg->maxsize, numcsqcsendstates, sv.csqcsendstates);
+	}
+#endif
+#if defined(MVD_PEXT1_SIMPLEPROJECTILE) && defined(FTE_PEXT_CSQC)
+	else
+#endif
+#ifdef FTE_PEXT_CSQC
+	if (client->csqcactive && !recorder)
+	{
+		SV_SimpleProjectileWriteFrame_CSQC(client, msg, msg->maxsize, numcsqcsendstates, sv.csqcsendstates);
 	}
 #endif
 

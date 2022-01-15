@@ -97,12 +97,14 @@ typedef struct
 	int         num_baseline_edicts;// number of entities that have baselines
 
 	edict_t		edicts[MAX_EDICTS];
+	extentvars_t	extentdata[MAX_EDICTS];
 	entvars_t	*game_edicts;		// can NOT be array indexed, because entvars_t is variable sized
 
 	int         max_edicts;         // might not MAX_EDICTS if mod allocates memory
 #ifdef MVD_PEXT1_SIMPLEPROJECTILE
 	sprojectile_state_t simple_projectiles[MAX_EDICTS];
-	unsigned short csqcsendstates[MAX_EDICTS];
+	unsigned short	csqcsendstates[MAX_EDICTS];
+	unsigned int	csqcchecksum;
 #endif
 
 	byte		*pvs, *phs;			// fully expanded and decompressed
@@ -391,15 +393,16 @@ typedef struct client_s
 #endif
 
 
-#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+#if defined(MVD_PEXT1_SIMPLEPROJECTILE) || defined(FTE_PEXT_CSQC)
 	// CSQC stuff, we don't have full CSQC yet but they are used for simpleprojectiles
+	int csqcactive;
 	int csqc_framenum;
 	int csqc_latestverified;
 	int csqcnumedicts;
 	unsigned char csqcentityscope[MAX_EDICTS];
 	unsigned int csqcentitysendflags[MAX_EDICTS];
 
-	#define NUM_CSQCENTITYDB_FRAMES 256
+	#define NUM_CSQCENTITYDB_FRAMES		UPDATE_MASK//256
 	csqcentityframedb_t csqcentityframehistory[NUM_CSQCENTITYDB_FRAMES];
 	int csqcentityframehistory_next;
 	int csqcentityframe_lastreset;

@@ -421,6 +421,10 @@ void SV_DropClient(client_t* drop)
 	drop->edict->v->frags = 0.0;
 	drop->name[0] = 0;
 
+#ifdef FTE_PEXT_CSQC
+	drop->csqcactive = false;
+#endif
+
 	Info_RemoveAll(&drop->_userinfo_ctx_);
 	Info_RemoveAll(&drop->_userinfoshort_ctx_);
 

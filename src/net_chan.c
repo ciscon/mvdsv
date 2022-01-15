@@ -425,6 +425,7 @@ qbool Netchan_Process (netchan_t *chan)
 		}
 	}
 
+
 	//
 	// if the current outgoing reliable message has been acknowledged
 	// clear the buffer to make way for the next

@@ -37,6 +37,7 @@
 const char *pr2_ent_data_ptr;
 vm_t *sv_vm = NULL;
 extern gameData_t gamedata;
+extern sizebuf_t *csqcmsgbuffer;
 
 static int PASSFLOAT(float f)
 {
@@ -1155,6 +1156,9 @@ MESSAGE WRITING
 #define	MSG_ALL			2		// reliable to all
 #define	MSG_INIT		3		// write to the init string
 #define	MSG_MULTICAST	4		// for multicast()
+#ifdef FTE_PEXT_CSQC
+#define MSG_ENTITY		5		// for csqc
+#endif
 
 
 sizebuf_t *WriteDest2(int dest)
@@ -1190,6 +1194,9 @@ sizebuf_t *WriteDest2(int dest)
 
 	case MSG_MULTICAST:
 		return &sv.multicast;
+
+	case MSG_ENTITY:
+		return csqcmsgbuffer;
 
 	default:
 		PR2_RunError ("WriteDest: bad destination");
@@ -1951,6 +1958,109 @@ intptr_t PF2_FS_GetFileList(char *path, char *ext,
 	return numfiles;
 }
 
+
+
+
+
+
+
+
+
+
+
+/*
+qvmextensions
+*/
+static int QVM_FindExtField(char *fname)
+{
+	extentvars_t *xv = NULL;
+#define comfieldfloat(name) if (!strcmp(fname, #name)) return ((int*)&xv->name - (int*)xv);
+#define comfieldint(name) if (!strcmp(fname, #name)) return ((int*)&xv->name - (int*)xv);
+#define comfieldvector(name) if (!strcmp(fname, #name)) return ((int*)&xv->name - (int*)xv);
+#define comfieldentity(name) if (!strcmp(fname, #name)) return ((int*)&xv->name - (int*)xv);
+#define comfieldstring(name) if (!strcmp(fname, #name)) return ((int*)&xv->name - (int*)xv);
+#define comfieldfunction(name, typestr) if (!strcmp(fname, #name)) return ((int*)&xv->name - (int*)xv);
+		svextqcfields
+#undef comfieldfloat
+#undef comfieldint
+#undef comfieldvector
+#undef comfieldentity
+#undef comfieldstring
+#undef comfieldfunction
+		return -1;	//unsupported
+}
+
+intptr_t PF2_SetExtField(intptr_t *args)
+{
+	edict_t *e = EDICT_NUM(NUM_FOR_GAME_EDICT(VMA(1)));
+
+	int i = QVM_FindExtField(args[2]);
+	int value = (int)(args[3]);
+
+	if (i < 0)
+		return 0;
+	((int*)e->xv)[i] = value;
+	return value;
+}
+
+
+intptr_t PF2_GetExtField(intptr_t *args)
+{
+	edict_t *e = EDICT_NUM(NUM_FOR_GAME_EDICT(VMA(1)));
+
+	int i = QVM_FindExtField(args[2]);
+
+	if (i < 0)
+		return 0;
+	return ((int*)e->xv)[i];
+}
+
+
+#ifdef FTE_PEXT_CSQC
+intptr_t PF2_SetSendNeeded(intptr_t *args)
+{
+	unsigned int subject = args[1];
+	int fl = args[2];
+	unsigned int to = args[3];
+
+	if (!to)
+	{	//broadcast
+		for (to = 0; to < MAX_CLIENTS; to++)
+			svs.clients[to].csqcentitysendflags[subject] |= fl;
+	}
+	else
+	{
+		to--;
+		if (to >= MAX_CLIENTS)
+			;	//some kind of error.
+		else
+			svs.clients[to].csqcentitysendflags[subject] |= fl;
+	}
+	return 0;
+}
+#endif
+
+
+
+typedef intptr_t(*traps_t)(intptr_t *args);
+traps_t extended_traps[512];
+
+struct
+{
+	char *extname;
+	traps_t trap;
+} qvmextensions[] =
+{
+	{"SetExtField",			PF2_SetExtField},
+	{"GetExtField",			PF2_GetExtField},
+#ifdef FTE_PEXT_CSQC
+	{"setsendneeded",		PF2_SetSendNeeded},
+#endif
+	{NULL, NULL}
+};
+
+
+
 /*
   int trap_Map_Extension( const char* ext_name, int mapto)
   return:
@@ -1960,7 +2070,7 @@ intptr_t PF2_FS_GetFileList(char *path, char *ext,
 */
 intptr_t PF2_Map_Extension(char *name, int mapto)
 {
-	if (mapto > 512)
+	if (mapto >= 512)
 	{
 		return -2;
 	}
@@ -1973,15 +2083,18 @@ intptr_t PF2_Map_Extension(char *name, int mapto)
 		return -1;
 	}
 
+	Con_Printf("Map request for %s\n", name);
+
 
 	int i;
 	for (i = 0; qvmextensions[i].extname; i++)
 	{
-		if (!strcasecmp(extname, qvmextensions[i].extname))
+		if (!strcasecmp(name, qvmextensions[i].extname))
 		{
-			pr2_API[mapto] = qvmextensions[i].trap;
-			retval->_int = mapto;
-			return;
+			Con_Printf("Mapping '%s' to extended_traps[%i]\n", name, mapto);
+
+			extended_traps[mapto] = qvmextensions[i].trap;
+			return mapto;
 		}
 	}
 
@@ -2696,6 +2809,9 @@ intptr_t PR2_GameSystemCalls(intptr_t *args) {
 		PF2_VisibleTo(args[1], args[2], args[3], VMA(4));
 		return 0;
 	default:
+		if (extended_traps[args[0]] != NULL)
+			return extended_traps[args[0]](args);
+
 		SV_Error("Bad game system trap: %ld", (long int)args[0]);
 	}
 	return 0;

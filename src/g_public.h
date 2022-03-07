@@ -170,7 +170,7 @@ typedef enum
 	G_SETUSERINFO,
 	G_MOVETOGOAL,
 	G_VISIBLETO,
-	_G__LASTAPI
+	_G__LASTAPI,
 } gameImport_t;
 
 // !!! new things comes to end of list !!!
@@ -218,6 +218,7 @@ typedef enum
 	GAME_CLIENT_SAY,			// ( int isTeamSay );
 	GAME_PAUSED_TIC,			// ( int duration_msec );	// duration is in msecs
 	GAME_CLEAR_EDICT,           // (self)
+	GAME_EDICT_CSQCSEND,		// (self,other,int sendflags)
 } gameExport_t;
 
 

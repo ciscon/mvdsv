@@ -61,12 +61,14 @@ typedef struct sv_edict_s
 
 	float		freetime;		// sv.time when the object was freed
 	double		lastruntime;	// sv.time when SV_RunEntity was last called for this edict (Tonik)
+	
 } sv_edict_t;
 
 typedef struct edict_s
 {
-	sv_edict_t	e;			// server side part of the edict_t
-	entvars_t	*v;			// C exported fields from progs
+	sv_edict_t		e;			// server side part of the edict_t
+	entvars_t		*v;			// C exported fields from progs
+	extentvars_t	*xv;		// extended fields
 } edict_t;
 
 //============================================================================
@@ -183,6 +185,12 @@ extern int fofs_trackent;
 extern int fofs_visibility;
 extern int fofs_hide_players;
 extern int fofs_teleported;
+extern int fofs_client_time;
+extern int fofs_attack_finished;
+extern int fofs_client_nextthink;
+extern int fofs_client_thinkindex;
+extern int fofs_client_ping;
+extern int fofs_client_predflags;
 
 #define EdictFieldFloat(ed, fieldoffset) ((eval_t *)((byte *)(ed)->v + (fieldoffset)))->_float
 #define EdictFieldVector(ed, fieldoffset) ((eval_t *)((byte *)(ed)->v + (fieldoffset)))->vector

@@ -1702,6 +1702,9 @@ MESSAGE WRITING
 #define	MSG_ALL			2		// reliable to all
 #define	MSG_INIT		3		// write to the init string
 #define	MSG_MULTICAST	4		// for multicast()
+#ifdef FTE_PEXT_CSQC
+#define	MSG_ENTITY		5		// for CSQC
+#endif
 
 sizebuf_t *WriteDest (void)
 {

@@ -40,6 +40,12 @@ int fofs_trackent;
 int fofs_visibility;
 int fofs_hide_players;
 int fofs_teleported;
+int fofs_client_time;
+int fofs_attack_finished;
+int	fofs_client_nextthink;
+int	fofs_client_thinkindex;
+int	fofs_client_ping;
+int	fofs_client_predflags;
 
 /*
 ================
@@ -337,6 +343,40 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 
 	sv.time = 1.0;
 
+
+#ifdef FTE_PEXT_CSQC
+	const char *file, *csprogsname;
+	size_t fsz;
+
+	fsz = 0;
+	csprogsname = "csprogs.dat";//sv_csqc_progname.string;
+	if (*csprogsname)
+		file = FS_LoadTempFile(csprogsname, &fsz);
+	else
+		file = NULL;
+	if (file)
+	{
+		char text[64];
+		sv.csqcchecksum = Com_BlockChecksum(file, fsz);
+		sprintf(text, "0x%x", sv.csqcchecksum);
+		Info_SetValueForStarKey(&svs.info, "*csprogs", text, MAX_SERVERINFO_STRING);
+		sprintf(text, "0x%x", (unsigned int)fsz);
+		Info_SetValueForStarKey(&svs.info, "*csprogssize", text, MAX_SERVERINFO_STRING);
+		if (strcmp(csprogsname, "csprogs.dat"))
+			Info_SetValueForStarKey(&svs.info, "*csprogsname", csprogsname, MAX_SERVERINFO_STRING);
+		else
+			Info_SetValueForStarKey(&svs.info, "*csprogsname", "", MAX_SERVERINFO_STRING);
+	}
+	else
+	{
+		sv.csqcchecksum = 0;
+		Info_SetValueForStarKey(&svs.info, "*csprogs", "", MAX_SERVERINFO_STRING);
+		Info_SetValueForStarKey(&svs.info, "*csprogssize", "", MAX_SERVERINFO_STRING);
+		Info_SetValueForStarKey(&svs.info, "*csprogsname", "", MAX_SERVERINFO_STRING);
+	}
+#endif
+
+
 	// load progs to get entity field count
 	// which determines how big each edict is
 	// and allocate edicts
@@ -349,6 +389,7 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 	for (i = 0; i < sv.max_edicts; i++)
 	{
 		sv.edicts[i].v = (entvars_t *)((byte *)sv.game_edicts + i * pr_edict_size);
+		sv.edicts[i].xv = &(sv.extentdata[i]);//(extentvars_t *)((byte *)sv.game_edicts + i * pr_edict_size);
 		sv.edicts[i].e.entnum = i;
 		sv.edicts[i].e.area.ed = &sv.edicts[i]; // yeah, pretty funny, but this help to find which edict_t own this area (link_t)
 		PR_ClearEdict(&sv.edicts[i]);
@@ -364,6 +405,13 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 	fofs_visibility = ED_FindFieldOffset ("visclients");
 	fofs_hide_players = ED_FindFieldOffset ("hideplayers");
 	fofs_teleported = ED_FindFieldOffset ("teleported");
+
+	fofs_client_time = ED_FindFieldOffset("client_time");
+	fofs_attack_finished = ED_FindFieldOffset("attack_finished");
+	fofs_client_nextthink = ED_FindFieldOffset("client_nextthink");
+	fofs_client_thinkindex = ED_FindFieldOffset("client_thinkindex");
+	fofs_client_ping = ED_FindFieldOffset("client_ping");
+	fofs_client_predflags = ED_FindFieldOffset("client_predflags");
 
 #ifdef MVD_PEXT1_HIGHLAGTELEPORT
 	if (fofs_teleported) {
@@ -416,6 +464,20 @@ void SV_SpawnServer(char *mapname, qbool devmap, char* entityfile, qbool loading
 			svs.mvdprotocolextension1 &= ~MVD_PEXT1_DEBUG_WEAPON;
 		}
 	}
+#endif
+#ifdef MVD_PEXT1_WEAPONPREDICTION
+	if (fofs_client_time && fofs_attack_finished && fofs_client_ping) {
+		svs.mvdprotocolextension1 |= MVD_PEXT1_WEAPONPREDICTION;
+	}
+	else {
+		svs.mvdprotocolextension1 &= ~MVD_PEXT1_WEAPONPREDICTION;
+	}
+#endif
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+	svs.mvdprotocolextension1 |= MVD_PEXT1_SIMPLEPROJECTILE;
+#endif
+#ifdef FTE_PEXT_CSQC
+	svs.fteprotocolextensions |= FTE_PEXT_CSQC;
 #endif
 
 	// find optional QC-exported functions.

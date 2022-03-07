@@ -97,9 +97,15 @@ typedef struct
 	int         num_baseline_edicts;// number of entities that have baselines
 
 	edict_t		edicts[MAX_EDICTS];
+	extentvars_t	extentdata[MAX_EDICTS];
 	entvars_t	*game_edicts;		// can NOT be array indexed, because entvars_t is variable sized
 
 	int         max_edicts;         // might not MAX_EDICTS if mod allocates memory
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+	sprojectile_state_t simple_projectiles[MAX_EDICTS];
+	unsigned short	csqcsendstates[MAX_EDICTS];
+	unsigned int	csqcchecksum;
+#endif
 
 	byte		*pvs, *phs;			// fully expanded and decompressed
 
@@ -182,6 +188,25 @@ typedef struct
 
 #ifdef MVD_PEXT1_SERVERSIDEWEAPON
 #define MAX_WEAPONSWITCH_OPTIONS    10
+#endif
+
+
+#ifdef MVD_PEXT1_SIMPLEPROJECTILE
+// code adapted from Darkplaces
+#define SCOPE_WANTREMOVE 1        // Set if a remove has been scheduled.
+#define SCOPE_WANTUPDATE 2        // Set if an update has been scheduled.
+#define SCOPE_WANTSEND (SCOPE_WANTREMOVE | SCOPE_WANTUPDATE)
+#define SCOPE_EXISTED_ONCE 4      // Set if the entity once existed. All these get resent on a full loss.
+#define SCOPE_ASSUMED_EXISTING 8  // Set if the entity is currently assumed existing and therefore needs removes.
+
+#define NUM_CSQCENTITIES_PER_FRAME 256
+typedef struct csqcentityframedb_s
+{
+	int framenum;
+	int num;
+	unsigned short entno[NUM_CSQCENTITIES_PER_FRAME];
+	int sendflags[NUM_CSQCENTITIES_PER_FRAME];
+} csqcentityframedb_t;
 #endif
 
 typedef struct client_s
@@ -366,6 +391,23 @@ typedef struct client_s
 	int             lastteleport_incomingseq; // incoming sequence# when the player teleported
 	float           lastteleport_teleportyaw; // new yaw angle, post-teleport
 #endif
+
+
+#if defined(MVD_PEXT1_SIMPLEPROJECTILE) || defined(FTE_PEXT_CSQC)
+	// CSQC stuff, we don't have full CSQC yet but they are used for simpleprojectiles
+	int csqcactive;
+	int csqc_framenum;
+	int csqc_latestverified;
+	int csqcnumedicts;
+	unsigned char csqcentityscope[MAX_EDICTS];
+	unsigned int csqcentitysendflags[MAX_EDICTS];
+
+	#define NUM_CSQCENTITYDB_FRAMES		UPDATE_MASK//256
+	csqcentityframedb_t csqcentityframehistory[NUM_CSQCENTITYDB_FRAMES];
+	int csqcentityframehistory_next;
+	int csqcentityframe_lastreset;
+#endif
+
 
 #ifdef MVD_PEXT1_SERVERSIDEWEAPON
 	// server-side weapons extension

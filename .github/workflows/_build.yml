@@ -4,7 +4,7 @@ on:
     inputs:
       runner:
         type: string
-        default: ubuntu-24.04
+        default: ubuntu-26.04
       deploy_type:
         # options are [snapshot, release]
         type: string
@@ -48,36 +48,27 @@ jobs:
         with:
           submodules: true
 
-      # The main archive doesn't have armhf, arm64 binaries, so if we add the
-      # foreign arch, `apt update` will fail on it. So add the 'Architectures'
-      # field to ensure it fetches the right meta-data.
-      - name: Fix the sources
-        if: matrix.arch == 'armhf' || matrix.arch == 'arm64'
+      - name: Add foreign architectures
         run: |
-          sudo tee /etc/apt/sources.list.d/ubuntu.sources <<EOF
-          Types: deb
-          Architectures: i386 amd64
-          URIs: http://archive.ubuntu.com/ubuntu/
-          Suites: noble noble-updates
-          Components: main universe restricted multiverse
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
-          Types: deb
-          Architectures: i386 amd64
-          URIs: http://security.ubuntu.com/ubuntu/
-          Suites: noble-security
-          Components: main universe restricted multiverse
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          #if [ "${{ matrix.os }}" = "linux" ]; then
+            sudo dpkg --add-architecture ${{ matrix.arch }}
+          #fi
+
+          if [ "${{ matrix.arch }}" = "armhf" ]; then
+            #add armhf ports repository
+            sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources <<EOF
+            Types: deb
+            Architectures: armhf
+            URIs: http://ports.ubuntu.com/ubuntu-ports
+            Suites: resolute resolute-updates resolute-backports
+            Components: main universe restricted multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           EOF
 
-          sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources <<EOF
-          Types: deb
-          Architectures: armhf arm64
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates noble-backports
-          Components: main universe restricted multiverse
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF
+            #specify only runner architecture for core ubuntu packages so we do not attempt to retrieve armhf packages from them
+            sudo sed -i '/^Components:.*/a Architectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          fi
 
       - name: Install build dependencies
         run: |
@@ -87,10 +78,6 @@ jobs:
             APT_FLAGS="--verbose-versions"
           else
             APT_FLAGS=""
-          fi
-
-          if [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" != "amd64" ]; then
-            sudo dpkg --add-architecture ${{ matrix.arch }}
           fi
 
           sudo apt-get update
